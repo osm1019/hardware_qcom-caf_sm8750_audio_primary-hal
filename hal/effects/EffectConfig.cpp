@@ -36,8 +36,34 @@ using aidl::android::media::audio::common::AudioUuid;
 using ::aidl::android::hardware::audio::effect::stringToUuid;
 using ::aidl::android::hardware::audio::effect::getEffectTypeUuidAxionFx;
 using ::aidl::android::hardware::audio::effect::getEffectImplUuidAxionFx;
+using ::aidl::android::hardware::audio::effect::getEffectTypeUuidDolbyDap;
+using ::aidl::android::hardware::audio::effect::getEffectImplUuidDolbyDap;
 
 namespace aidl::qti::effects {
+
+namespace {
+
+// Kept in sync with kHardcodedEffects in EffectFactory.cpp.
+struct InjectedEffect {
+    const char* name;
+    const char* label;
+    const char* paths[2];
+    const AudioUuid& (*typeUuid)();
+    const AudioUuid& (*implUuid)();
+};
+
+constexpr InjectedEffect kInjectedEffects[] = {
+        {"axionfx", "AxionFx",
+         {"/vendor/lib64/soundfx/libaxionfxaidl.so", "/vendor/lib/soundfx/libaxionfxaidl.so"},
+         getEffectTypeUuidAxionFx,
+         getEffectImplUuidAxionFx},
+        {"dap", "DolbyDap",
+         {"/vendor/lib64/soundfx/libswdapaidl.so", "/vendor/lib/soundfx/libswdapaidl.so"},
+         getEffectTypeUuidDolbyDap,
+         getEffectImplUuidDolbyDap},
+};
+
+}  // namespace
 
 EffectConfig::EffectConfig(const std::string& file) {
     tinyxml2::XMLDocument doc;
@@ -86,21 +112,20 @@ EffectConfig::EffectConfig(const std::string& file) {
     LOG(DEBUG) << __func__ << " successfully parsed " << file << ", skipping " << mSkippedElements
                << " element(s)";
 
-    static const char* kAxionFxLibPaths[] = {
-        "/vendor/lib64/soundfx/libaxionfxaidl.so",
-        "/vendor/lib/soundfx/libaxionfxaidl.so"
-    };
-    for (const char* libPath : kAxionFxLibPaths) {
-        if (access(libPath, R_OK) == 0) {
-            mLibraryMap["axionfx"] = libPath;
+    for (const auto& effect : kInjectedEffects) {
+        for (const char* libPath : effect.paths) {
+            if (access(libPath, R_OK) != 0) {
+                continue;
+            }
+            mLibraryMap[effect.name] = libPath;
             Library lib;
-            lib.name = "axionfx";
-            lib.uuid = getEffectImplUuidAxionFx();
-            lib.type = getEffectTypeUuidAxionFx();
+            lib.name = effect.name;
+            lib.uuid = effect.implUuid();
+            lib.type = effect.typeUuid();
             EffectLibraries effectLibs;
             effectLibs.libraries.push_back(std::move(lib));
-            mEffectsMap["axionfx"] = std::move(effectLibs);
-            LOG(INFO) << __func__ << " injected AxionFx from " << libPath;
+            mEffectsMap[effect.name] = std::move(effectLibs);
+            LOG(INFO) << __func__ << " injected " << effect.label << " from " << libPath;
             break;
         }
     }

@@ -39,8 +39,33 @@
 using aidl::android::media::audio::common::AudioUuid;
 using ::aidl::android::hardware::audio::effect::getEffectTypeUuidAxionFx;
 using ::aidl::android::hardware::audio::effect::getEffectImplUuidAxionFx;
+using ::aidl::android::hardware::audio::effect::getEffectTypeUuidDolbyDap;
+using ::aidl::android::hardware::audio::effect::getEffectImplUuidDolbyDap;
 
 namespace aidl::qti::effects {
+
+namespace {
+
+// Effects that ship outside audio_effects_config.xml and are discovered by path.
+struct HardcodedEffect {
+    const char* name;
+    const char* paths[2];
+    const AudioUuid& (*typeUuid)();
+    const AudioUuid& (*implUuid)();
+};
+
+constexpr HardcodedEffect kHardcodedEffects[] = {
+        {"AxionFx",
+         {"/vendor/lib64/soundfx/libaxionfxaidl.so", "/vendor/lib/soundfx/libaxionfxaidl.so"},
+         getEffectTypeUuidAxionFx,
+         getEffectImplUuidAxionFx},
+        {"DolbyDap",
+         {"/vendor/lib64/soundfx/libswdapaidl.so", "/vendor/lib/soundfx/libswdapaidl.so"},
+         getEffectTypeUuidDolbyDap,
+         getEffectImplUuidDolbyDap},
+};
+
+}  // namespace
 
 Factory::Factory(const std::string& file) : mConfig(EffectConfig(file)) {
     LOG(VERBOSE) << __func__ << " with config file: " << file;
@@ -303,25 +328,28 @@ void Factory::getDlSyms_l(DlEntry& entry) {
 }
 
 void Factory::loadHardcodedEffects() {
-    static const char* kAxionFxLibPaths[] = {
-        "/vendor/lib64/soundfx/libaxionfxaidl.so",
-        "/vendor/lib/soundfx/libaxionfxaidl.so"
-    };
-    for (const char* libPath : kAxionFxLibPaths) {
-        if (access(libPath, R_OK) != 0) {
-            continue;
+    for (const auto& effect : kHardcodedEffects) {
+        bool found = false;
+        for (const char* libPath : effect.paths) {
+            if (access(libPath, R_OK) != 0) {
+                continue;
+            }
+            Descriptor::Identity id;
+            id.type = effect.typeUuid();
+            id.uuid = effect.implUuid();
+            id.proxy = std::nullopt;
+            LOG(INFO) << __func__ << " loading hardcoded " << effect.name << " effect from "
+                      << libPath;
+            if (openEffectLibrary(id.uuid, libPath)) {
+                mIdentitySet.insert(std::move(id));
+            }
+            found = true;
+            break;
         }
-        Descriptor::Identity id;
-        id.type = getEffectTypeUuidAxionFx();
-        id.uuid = getEffectImplUuidAxionFx();
-        id.proxy = std::nullopt;
-        LOG(INFO) << __func__ << " loading hardcoded AxionFx effect from " << libPath;
-        if (openEffectLibrary(id.uuid, libPath)) {
-            mIdentitySet.insert(std::move(id));
+        if (!found) {
+            LOG(DEBUG) << __func__ << " " << effect.name << " library not found, skipping";
         }
-        return;
     }
-    LOG(DEBUG) << __func__ << " AxionFx library not found, skipping";
 }
 
 } // namespace aidl::qti::effects

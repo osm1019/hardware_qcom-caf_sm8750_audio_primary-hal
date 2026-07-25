@@ -18,6 +18,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
         <library name="volume_listener" path="libvolumelistener.so"/>
         <library name="quasar" path="libquasar.so"/>
         <library name="axionfx" path="libaxionfxaidl.so"/>
+        <library name="dap" path="libswdapaidl.so"/>
     </libraries>
 
     <effects>
@@ -68,6 +69,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
         <effect name="notification_helper" library="volume_listener" uuid="0b776dde-0590-11e5-81ba-0025b32654a0"/>
         <effect name="quasar" library="quasar" uuid="71d0e2ee-e44d-483d-a809-09e75ee55ecd"/>
         <effect name="axionfx" library="axionfx" uuid="f35cb927-a887-4f3d-847f-770634486d53"/>
+        <effect name="dap" library="dap" uuid="9d4921da-8225-4f29-aefa-39537a04bcaa"/>
     </effects>
 
     <postprocess>
